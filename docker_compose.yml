@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  postgresdb:
+    image: stevecmd/devops-stage-2-postgresdb:latest
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal-network
+
+  backend:
+    image: stevecmd/devops-stage-2-backend:latest
+    environment:
+      POSTGRES_SERVER: postgresdb
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgresdb
+    networks:
+      - internal-network
+
+  frontend:
+    image: stevecmd/devops-stage-2-frontend:latest
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+    ports:
+      - "5173:5173"
+    networks:
+      - internal-network
+
+  adminer:
+    image: stevecmd/devops-stage-2-adminer:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - internal-network
+
+  nginx:
+    image: stevecmd/devops-stage-2-nginx:latest
+    ports:
+      - "80:80"
+      - "445:445"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt/live/hng.twilightparadox.com/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/hng.twilightparadox.com/privkey.pem:/etc/ssl/private/privkey.pem:ro
+    depends_on:
+      - backend
+      - frontend
+      - adminer
+    networks:
+      - internal-network
+
+  proxy-manager:
+    image: stevecmd/devops-stage-2-proxy-manager:latest
+    environment:
+      DB_HOST: postgresdb
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+    ports:
+      - "8090:8080"
+      - "81:81"   # HTTP Port for Let's Encrypt Challenge
+      - "444:444" # HTTPS Port for Let's Encrypt Challenge
+    volumes:
+      - ./proxy-manager/data:/data
+      - ./proxy-manager/letsencrypt:/etc/letsencrypt
+      - ./proxy-manager/var/log:/var/log
+    networks:
+      - internal-network
+
+networks:
+  internal-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
